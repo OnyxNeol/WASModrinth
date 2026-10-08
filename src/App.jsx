@@ -6,7 +6,9 @@ import ModCard from './components/ModCard.jsx'
 import ModDetail from './components/ModDetail.jsx'
 import CategoriesPage from './components/CategoriesPage.jsx'
 import SubmitModal from './components/SubmitModal.jsx'
+import AuthModal from './components/AuthModal.jsx'
 import { fetchManifest } from './data/manifest.js'
+import { isLoggedIn } from './data/auth.js'
 
 export default function App() {
   const navigate = useNavigate()
@@ -19,6 +21,7 @@ export default function App() {
   const [selectedLicense, setSelectedLicense] = useState(null)
   const [sortBy, setSortBy] = useState('downloads')
   const [selectedModSlug, setSelectedModSlug] = useState(null)
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   // Derive modal visibility from the route
   const showSubmitModal = location.pathname === '/upload'
@@ -175,14 +178,27 @@ export default function App() {
         onSearch={handleSearch}
         onNavigate={handleNavigate}
         currentPath={location.pathname}
+        onAuthClick={() => setShowAuthModal(true)}
       />
       {renderRoute()}
-      {showSubmitModal && (
+      {showSubmitModal && isLoggedIn() && (
         <SubmitModal
           onClose={() => navigate('/')}
           onSubmitted={() => {
             refreshMods()
           }}
+        />
+      )}
+      {showSubmitModal && !isLoggedIn() && (
+        <AuthModal
+          onClose={() => navigate('/')}
+          onAuthed={() => setShowAuthModal(false)}
+        />
+      )}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onAuthed={() => setShowAuthModal(false)}
         />
       )}
       {/* Footer */}
