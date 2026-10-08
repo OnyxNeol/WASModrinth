@@ -37,7 +37,7 @@ services:
     command: ["sh", "-ec", "npm install && exec npm run dev"]
     restart: on-failure
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/send-code', {method:\"POST\", headers:{\"Content-Type\":\"application/json\"}, body:JSON.stringify({email:\"test@test.com\"})}).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "const http = require('http'); const req = http.get('http://localhost:3001/', (res) => process.exit(res.statusCode < 500 ? 0 : 1)); req.on('error', () => process.exit(1));"]
       interval: 10s
       timeout: 5s
       retries: 5

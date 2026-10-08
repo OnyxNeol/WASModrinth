@@ -39,7 +39,12 @@ app.post('/api/send-code', async (req, res) => {
   }
 
   try {
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'WASModrinth <wasmodrinth@resend.dev>'
+    // Use configured from-email, or fall back to Resend's default testing sender
+    const configuredFrom = process.env.RESEND_FROM_EMAIL
+    const emailPattern = /^("[^"]*"|[^<>]+)\s*<[^@]+@[^@]+\.[^@]+>$|^[^@]+@[^@]+\.[^@]+$/
+    const fromEmail = (configuredFrom && emailPattern.test(configuredFrom))
+      ? configuredFrom
+      : 'WASModrinth <onboarding@resend.dev>'
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -117,6 +122,9 @@ app.post('/api/verify-code', (req, res) => {
 
   res.json({ success: true, account })
 })
+
+// Simple health endpoint
+app.get('/', (req, res) => res.json({ status: 'ok' }))
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, '0.0.0.0', () => {
