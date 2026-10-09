@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #42444a #16181c;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: #16181c;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #42444a;
+    border-radius: 4px;
+  }
+  body {
+    @apply bg-surface-1 text-content-default font-sans antialiased;
+  }
+  h1, h2, h3, h4 {
+    @apply font-bold text-content-primary;
+  }
+  a {
+    @apply text-content-link transition-colors hover:text-accent-blue;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface-2 rounded-card shadow-card border border-surface-3 transition-all;
+  }
+  .card-hover {
+    @apply hover:bg-surface-3 hover:shadow-floating;
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-btn font-medium text-sm transition-all shadow-btn;
+  }
+  .btn-primary {
+    @apply btn bg-brand-green text-black font-semibold hover:brightness-110;
+  }
+  .btn-secondary {
+    @apply btn bg-surface-4 text-content-primary border border-surface-5 hover:bg-surface-5;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-content-secondary hover:bg-surface-3 hover:text-content-primary shadow-none;
+  }
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+  .badge-green {
+    @apply badge bg-brand-green/15 text-brand-green;
+  }
+  .badge-blue {
+    @apply badge bg-accent-blue/15 text-accent-blue;
+  }
+  .badge-purple {
+    @apply badge bg-accent-purple/15 text-accent-purple;
+  }
+  .badge-red {
+    @apply badge bg-accent-red/15 text-accent-red;
+  }
+  .badge-gray {
+    @apply badge bg-accent-gray/15 text-accent-gray;
+  }
+  .input {
+    @apply bg-surface-3 border border-surface-5 rounded-btn px-3 py-2 text-content-primary
+           placeholder-content-secondary text-sm outline-none transition-all
+           focus:border-brand-green focus:ring-1 focus:ring-brand-green;
+  }
+  .modal-backdrop {
+    @apply fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4;
+  }
+  .modal-panel {
+    @apply bg-surface-2 rounded-card shadow-floating border border-surface-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto;
+  }
+}

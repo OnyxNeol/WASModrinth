@@ -1,0 +1,15 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "RESEND_API_KEY",
+      "description": "Resend API key (from https://resend.com/api-keys) — used to send verification emails. Optional for dev: without it, codes are returned in the API response instead of being emailed."
+    },
+    {
+      "name": "RESEND_FROM_EMAIL",
+      "description": "From-email address for Resend (e.g. 'WASModrinth <noreply@yourdomain.com>'). Must use a verified domain in Resend. Optional — defaults to Resend's onboarding@resend.dev testing sender."
+    }
+  ]
+}
