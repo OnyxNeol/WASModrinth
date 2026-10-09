@@ -77,25 +77,6 @@ services:
       retries: 6
       start_period: 30s
 
-  gitea-init:
-    image: gitea/gitea:latest
-    depends_on:
-      gitea:
-        condition: service_healthy
-    user: "1000:1000"
-    environment:
-      - USER_UID=1000
-      - USER_GID=1000
-      - GITEA__database__DB_TYPE=sqlite3
-      - GITEA__database__PATH=/data/gitea/gitea.db
-      - GITEA__security__INSTALL_LOCK=true
-      - GITEA_WORK_DIR=/data/gitea
-    volumes:
-      - gitea-data:/data
-    entrypoint: ["/usr/bin/entrypoint"]
-    command: ["gitea", "admin", "user", "create", "--admin", "--username", "wasmodrinth", "--password", "gitea_admin_123", "--email", "admin@wasmodrinth.local", "--must-change-password=false"]
-    restart: 'no'
-
 volumes:
   wasmodrinth-db:
   gitea-data:
