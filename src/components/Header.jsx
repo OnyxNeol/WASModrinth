@@ -37,9 +37,7 @@ export default function Header({ onSearch, onNavigate, currentPath, onAuthClick 
           onClick={() => onNavigate('/')}
           className="flex items-center gap-2 flex-shrink-0"
         >
-          <div className="w-8 h-8 rounded-lg bg-brand-green flex items-center justify-center">
-            <span className="text-black font-extrabold text-lg">W</span>
-          </div>
+          <img src="/logo.png" alt="WASModrinth" className="w-8 h-8 rounded-lg object-cover" />
           <span className="font-extrabold text-lg text-content-primary hidden sm:inline">
             WASModrinth
           </span>

@@ -85,7 +85,15 @@ function sendVerificationEmail(email, code) {
       html: `
         <div style="font-family: Inter, system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
           <div style="text-align: center; margin-bottom: 24px;">
-            <div style="display: inline-block; background: #1bd96a; color: #000; font-weight: 800; font-size: 24px; padding: 8px 16px; border-radius: 12px;">W</div>
+            <div style="display: inline-block; background: #1a1c20; border-radius: 12px; padding: 6px;">
+              <svg width="40" height="40" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="64" height="64" rx="14" fill="#1a1c20"/>
+                <g stroke="#34d399" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                  <path d="M12 18 L20 44 L28 24 L36 44 L44 24"/>
+                  <path d="M44 24 L44 14 M40 18 L44 14 L48 18"/>
+                </g>
+              </svg>
+            </div>
             <h1 style="color: #ffffff; margin: 16px 0 0;">WASModrinth</h1>
           </div>
           <div style="background: #1d1f23; border: 1px solid #34363c; border-radius: 16px; padding: 32px;">
