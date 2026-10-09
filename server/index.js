@@ -3,6 +3,7 @@ import cors from 'cors'
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
+import { searchRepos, getRepoContents, createModRepo, streamRawFile } from './gitea.js'
 
 const app = express()
 
@@ -31,7 +32,7 @@ const verificationCodes = new Map() // email -> { code, expires, purpose: 'signu
 
 // --- CORS ---
 app.use(cors({ origin: true, credentials: true }))
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
 
 // --- Helpers ---
 function sendVerificationEmail(email, code) {
@@ -224,6 +225,59 @@ app.post('/api/signout', (req, res) => {
     db.prepare('DELETE FROM sessions WHERE token = ?').run(token)
   }
   res.json({ success: true })
+})
+
+// --- Gitea integration routes ---
+
+// List/search repos
+app.get('/api/gitea/repos', async (req, res) => {
+  try {
+    const repos = await searchRepos(req.query.q)
+    res.json({ repos })
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
+})
+
+// Get repo file listing
+app.get('/api/gitea/repos/:owner/:repo/contents', async (req, res) => {
+  try {
+    const contents = await getRepoContents(req.params.owner, req.params.repo, req.query.path || '')
+    res.json({ contents })
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
+})
+
+// Create a Gitea repo with a mod file
+app.post('/api/gitea/create-mod', async (req, res) => {
+  try {
+    const { mod, fileContent } = req.body
+    if (!mod || !fileContent) {
+      return res.status(400).json({ error: 'Mod data and file content are required' })
+    }
+    const result = await createModRepo(mod, fileContent)
+    res.json({ success: true, ...result })
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
+})
+
+// Proxy raw file download from Gitea
+app.get('/api/gitea/raw/:owner/:repo/:branch/*', async (req, res) => {
+  try {
+    const { owner, repo, branch } = req.params
+    const filepath = req.params[0]
+    const giteaRes = await streamRawFile(owner, repo, branch, filepath)
+    if (!giteaRes.ok) {
+      return res.status(giteaRes.status).json({ error: 'File not found' })
+    }
+    res.setHeader('Content-Type', giteaRes.headers.get('content-type') || 'application/octet-stream')
+    const buffer = Buffer.from(await giteaRes.arrayBuffer())
+    res.send(buffer)
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
 })
 
 const PORT = process.env.PORT || 3001

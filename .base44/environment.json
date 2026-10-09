@@ -11,5 +11,12 @@
       "name": "RESEND_FROM_EMAIL",
       "description": "From-email address for Resend (e.g. 'WASModrinth <noreply@yourdomain.com>'). Must use a verified domain in Resend. Optional — defaults to Resend's onboarding@resend.dev testing sender."
     }
-  ]
+  ],
+  "services": {
+    "gitea": {
+      "port": 3002,
+      "adminUser": "wasmodrinth",
+      "description": "Self-hosted Gitea instance for mod repository hosting. Admin user auto-created by gitea-init service. API accessed by the auth server via basic auth."
+    }
+  }
 }

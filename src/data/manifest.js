@@ -61,6 +61,10 @@ export function resolveDownloadUrl(mod) {
  */
 export function getHostingProvider(mod) {
   if (!mod.download_url) return 'unknown'
+  // Gitea download URLs are relative paths proxied through the auth server
+  if (mod.download_url.includes('/api/gitea/')) {
+    return 'gitea'
+  }
   try {
     const host = new URL(mod.download_url).hostname
     if (host === 'raw.githubusercontent.com' || host.endsWith('.githubusercontent.com')) {

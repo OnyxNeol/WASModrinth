@@ -48,6 +48,7 @@ export default function ModDetail({ mod, onNavigate }) {
               )}
               {hosting === 'github' && <span className="badge-blue">GitHub</span>}
               {hosting === 'huggingface' && <span className="badge-purple">Hugging Face</span>}
+              {hosting === 'gitea' && <span className="badge-green">Gitea</span>}
               {status && <span className={status.badgeClass}>{status.label}</span>}
             </div>
           </div>
@@ -87,7 +88,7 @@ export default function ModDetail({ mod, onNavigate }) {
               </div>
               {downloadUrl && (
                 <p className="text-xs text-content-secondary break-all">
-                  Source: {hosting === 'github' ? 'raw.githubusercontent.com' : 'huggingface.co'} —{' '}
+                  Source: {hosting === 'github' ? 'raw.githubusercontent.com' : hosting === 'gitea' ? 'Gitea' : 'huggingface.co'} —{' '}
                   <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="text-content-link">
                     {downloadUrl}
                   </a>
@@ -120,7 +121,7 @@ export default function ModDetail({ mod, onNavigate }) {
             <div className="flex justify-between text-sm">
               <span className="text-content-secondary">Hosting</span>
               <span className="text-content-primary font-medium">
-                {hosting === 'github' ? 'GitHub' : hosting === 'huggingface' ? 'Hugging Face' : '—'}
+                {hosting === 'github' ? 'GitHub' : hosting === 'huggingface' ? 'Hugging Face' : hosting === 'gitea' ? 'Gitea' : '—'}
               </span>
             </div>
             <div className="flex justify-between text-sm">

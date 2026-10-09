@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { CATEGORIES, LICENSES } from '../data/constants.js'
 import { validateModEntry, submitMod, getHostingProvider } from '../data/manifest.js'
+import { createGiteaMod } from '../data/gitea.js'
 
 /**
  * SubmitModal — adapts Modrinth's mod submission workflow with a form modal
- * that performs client-side .js file extension checks and schema validation
- * before registering entries in the manifest store.
+ * that supports two storage modes: creating a Gitea repository (with file upload)
+ * or using an external download URL (raw GitHub / Hugging Face).
  */
 export default function SubmitModal({ onClose, onSubmitted }) {
+  const [storageMode, setStorageMode] = useState('gitea') // 'gitea' | 'external'
   const [form, setForm] = useState({
     slug: '',
     title: '',
@@ -20,12 +22,29 @@ export default function SubmitModal({ onClose, onSubmitted }) {
     download_url: '',
     icon_url: '',
   })
+  const [fileContent, setFileContent] = useState(null)
   const [errors, setErrors] = useState([])
   const [success, setSuccess] = useState(null)
+  const [loading, setLoading] = useState(false)
 
   const update = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors([])
+  }
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    // Auto-fill filename and slug from the file name
+    const name = file.name
+    update('filename', name)
+    if (!form.slug) {
+      const slug = name.replace(/\.js$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      update('slug', slug)
+    }
+    const reader = new FileReader()
+    reader.onload = () => setFileContent(reader.result)
+    reader.readAsText(file)
   }
 
   // Auto-detect hosting provider hint from the download_url
@@ -39,27 +58,64 @@ export default function SubmitModal({ onClose, onSubmitted }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const validation = validateModEntry(form)
-    if (!validation.valid) {
-      setErrors(validation.errors)
-      return
-    }
 
-    const result = await submitMod(form)
-    if (result.success) {
-      setSuccess(result.mod)
-      onSubmitted?.(result.mod)
+    if (storageMode === 'gitea') {
+      // Gitea mode: validate without download_url (server generates it)
+      const formForValidation = { ...form, download_url: 'https://gitea.local/placeholder' }
+      const validation = validateModEntry(formForValidation)
+      if (!validation.valid) {
+        setErrors(validation.errors)
+        return
+      }
+      if (!fileContent) {
+        setErrors(['Please select a .js file to upload to Gitea'])
+        return
+      }
+
+      setLoading(true)
+      setErrors([])
+      try {
+        const giteaResult = await createGiteaMod(form, fileContent)
+        const result = await submitMod({ ...form, download_url: giteaResult.downloadUrl })
+        if (result.success) {
+          setSuccess(result.mod)
+          onSubmitted?.(result.mod)
+        } else {
+          setErrors(result.errors)
+        }
+      } catch (err) {
+        setErrors([err.message])
+      } finally {
+        setLoading(false)
+      }
     } else {
-      setErrors(result.errors)
+      // External URL mode: validate with download_url
+      const validation = validateModEntry(form)
+      if (!validation.valid) {
+        setErrors(validation.errors)
+        return
+      }
+
+      setLoading(true)
+      setErrors([])
+      try {
+        const result = await submitMod(form)
+        if (result.success) {
+          setSuccess(result.mod)
+          onSubmitted?.(result.mod)
+        } else {
+          setErrors(result.errors)
+        }
+      } catch (err) {
+        setErrors([err.message])
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
   const handleClose = () => {
-    if (success) {
-      onClose()
-    } else {
-      onClose()
-    }
+    onClose()
   }
 
   return (
@@ -92,7 +148,8 @@ export default function SubmitModal({ onClose, onSubmitted }) {
             <div>
               <h3 className="text-lg font-bold text-content-primary">Mod Submitted!</h3>
               <p className="text-sm text-content-secondary mt-1">
-                <span className="text-content-primary font-medium">{success.title}</span> has been registered.
+                <span className="text-content-primary font-medium">{success.title}</span> has been registered
+                {storageMode === 'gitea' && ' and pushed to a Gitea repository'}.
               </p>
             </div>
             <button onClick={onClose} className="btn-primary mx-auto">Done</button>
@@ -109,6 +166,63 @@ export default function SubmitModal({ onClose, onSubmitted }) {
                     <li key={i}>{err}</li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Storage mode toggle */}
+            <div>
+              <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
+                Storage
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStorageMode('gitea')}
+                  className={`p-3 rounded-lg border text-left transition-colors ${
+                    storageMode === 'gitea'
+                      ? 'border-brand-green bg-brand-green/10'
+                      : 'border-surface-4 hover:border-surface-5'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h18v18H3V3zm2 2v14h14V5H5z"/></svg>
+                    <span className="text-sm font-bold text-content-primary">Gitea Repository</span>
+                  </div>
+                  <p className="text-xs text-content-secondary">Upload .js file — creates a Gitea repo automatically</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStorageMode('external')}
+                  className={`p-3 rounded-lg border text-left transition-colors ${
+                    storageMode === 'external'
+                      ? 'border-brand-green bg-brand-green/10'
+                      : 'border-surface-4 hover:border-surface-5'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <span className="text-sm font-bold text-content-primary">External URL</span>
+                  </div>
+                  <p className="text-xs text-content-secondary">Provide a raw GitHub or Hugging Face link</p>
+                </button>
+              </div>
+            </div>
+
+            {/* File upload (Gitea mode only) */}
+            {storageMode === 'gitea' && (
+              <div>
+                <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
+                  Mod File <span className="text-accent-orange normal-case">(.js required)</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".js"
+                  onChange={handleFileSelect}
+                  className="block w-full text-sm text-content-secondary file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-surface-3 file:text-content-primary file:font-medium file:cursor-pointer hover:file:bg-surface-4 cursor-pointer"
+                />
+                {form.filename && (
+                  <p className="text-xs text-brand-green mt-1">✓ Selected: {form.filename}</p>
+                )}
               </div>
             )}
 
@@ -205,18 +319,7 @@ export default function SubmitModal({ onClose, onSubmitted }) {
                 </label>
                 <select
                   value={form.license}
-                  onChange={(e) => {
-                    update('license', e.target.value)
-                    // Provide a URL template hint based on license hosting
-                    const lic = LICENSES[e.target.value]
-                    if (lic && !form.download_url) {
-                      if (lic.hosting === 'github') {
-                        update('download_url', 'https://raw.githubusercontent.com/owner/repo/main/dist/mod.js')
-                      } else if (lic.hosting === 'huggingface') {
-                        update('download_url', 'https://huggingface.co/owner/repo/resolve/main/dist/mod.js')
-                      }
-                    }
-                  }}
+                  onChange={(e) => update('license', e.target.value)}
                   className="input w-full"
                 >
                   <option value="">Select...</option>
@@ -227,48 +330,52 @@ export default function SubmitModal({ onClose, onSubmitted }) {
               </div>
             </div>
 
-            {/* Filename (.js check) */}
-            <div>
-              <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
-                Filename <span className="text-accent-orange normal-case">(.js required)</span>
-              </label>
-              <input
-                type="text"
-                value={form.filename}
-                onChange={(e) => update('filename', e.target.value)}
-                placeholder="my-mod.js"
-                className={`input w-full ${
-                  form.filename && !form.filename.endsWith('.js')
-                    ? 'border-accent-red focus:border-accent-red focus:ring-accent-red'
-                    : ''
-                }`}
-              />
-              {form.filename && !form.filename.endsWith('.js') && (
-                <p className="text-xs text-accent-red mt-1">
-                  ⚠ Eaglercraft mods must have a .js extension
-                </p>
-              )}
-            </div>
+            {/* Filename (external mode only — in Gitea mode it's auto-filled from the file) */}
+            {storageMode === 'external' && (
+              <div>
+                <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
+                  Filename <span className="text-accent-orange normal-case">(.js required)</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.filename}
+                  onChange={(e) => update('filename', e.target.value)}
+                  placeholder="my-mod.js"
+                  className={`input w-full ${
+                    form.filename && !form.filename.endsWith('.js')
+                      ? 'border-accent-red focus:border-accent-red focus:ring-accent-red'
+                      : ''
+                  }`}
+                />
+                {form.filename && !form.filename.endsWith('.js') && (
+                  <p className="text-xs text-accent-red mt-1">
+                    ⚠ Eaglercraft mods must have a .js extension
+                  </p>
+                )}
+              </div>
+            )}
 
-            {/* Download URL (dual-hosting) */}
-            <div>
-              <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
-                Download URL (absolute)
-              </label>
-              <input
-                type="text"
-                value={form.download_url}
-                onChange={(e) => update('download_url', e.target.value)}
-                placeholder="https://raw.githubusercontent.com/... or https://huggingface.co/..."
-                className="input w-full text-sm"
-              />
-              {hostingHint && (
-                <p className="text-xs text-brand-green mt-1">✓ {hostingHint}</p>
-              )}
-              <p className="text-xs text-content-secondary mt-1">
-                MIT/Apache mods → raw GitHub · ARR mods → Hugging Face
-              </p>
-            </div>
+            {/* Download URL (external mode only) */}
+            {storageMode === 'external' && (
+              <div>
+                <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
+                  Download URL (absolute)
+                </label>
+                <input
+                  type="text"
+                  value={form.download_url}
+                  onChange={(e) => update('download_url', e.target.value)}
+                  placeholder="https://raw.githubusercontent.com/... or https://huggingface.co/..."
+                  className="input w-full text-sm"
+                />
+                {hostingHint && (
+                  <p className="text-xs text-brand-green mt-1">✓ {hostingHint}</p>
+                )}
+                <p className="text-xs text-content-secondary mt-1">
+                  MIT/Apache mods → raw GitHub · ARR mods → Hugging Face
+                </p>
+              </div>
+            )}
 
             {/* Icon URL (optional) */}
             <div>
@@ -289,11 +396,22 @@ export default function SubmitModal({ onClose, onSubmitted }) {
               <button type="button" onClick={onClose} className="btn-secondary">
                 Cancel
               </button>
-              <button type="submit" className="btn-primary">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Submit Mod
+              <button type="submit" disabled={loading} className="btn-primary disabled:opacity-50">
+                {loading ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round"/>
+                    </svg>
+                    {storageMode === 'gitea' ? 'Creating repo...' : 'Submitting...'}
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Submit Mod
+                  </>
+                )}
               </button>
             </div>
           </form>

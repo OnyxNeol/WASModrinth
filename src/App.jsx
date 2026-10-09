@@ -7,6 +7,7 @@ import ModDetail from './components/ModDetail.jsx'
 import CategoriesPage from './components/CategoriesPage.jsx'
 import SubmitModal from './components/SubmitModal.jsx'
 import AuthModal from './components/AuthModal.jsx'
+import GiteaBrowser from './components/GiteaBrowser.jsx'
 import { fetchManifest } from './data/manifest.js'
 import { isLoggedIn } from './data/auth.js'
 
@@ -118,6 +119,11 @@ export default function App() {
     // Upload — show modal
     if (path === '/upload') {
       return null // modal is rendered separately below
+    }
+
+    // Gitea browser
+    if (path === '/gitea') {
+      return <GiteaBrowser onNavigate={handleNavigate} />
     }
 
     // Home — mod grid
