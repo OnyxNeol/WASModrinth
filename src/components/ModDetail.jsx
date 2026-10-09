@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { LICENSES, CATEGORIES, MOD_STATUSES } from '../data/constants.js'
 import { resolveDownloadUrl, getHostingProvider, formatDownloads } from '../data/manifest.js'
 
@@ -11,11 +12,28 @@ export default function ModDetail({ mod, onNavigate }) {
   const status = MOD_STATUSES[mod.status]
   const downloadUrl = resolveDownloadUrl(mod)
   const hosting = getHostingProvider(mod)
+  const [downloadCount, setDownloadCount] = useState(mod.downloads ?? 0)
+
+  // Fetch real download count from backend
+  useEffect(() => {
+    fetch(`/api/downloads/${mod.slug}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.count === 'number') setDownloadCount(data.count)
+      })
+      .catch(() => {})
+  }, [mod.slug])
 
   const handleDownload = () => {
-    if (downloadUrl) {
-      window.open(downloadUrl, '_blank', 'noopener,noreferrer')
-    }
+    if (!downloadUrl) return
+    // Increment download count on the backend
+    fetch(`/api/downloads/${mod.slug}`, { method: 'POST' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.count === 'number') setDownloadCount(data.count)
+      })
+      .catch(() => {})
+    window.open(downloadUrl, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -104,7 +122,7 @@ export default function ModDetail({ mod, onNavigate }) {
             <h3 className="text-sm font-bold text-content-primary">Info</h3>
             <div className="flex justify-between text-sm">
               <span className="text-content-secondary">Downloads</span>
-              <span className="text-content-primary font-medium">{formatDownloads(mod.downloads ?? 0)}</span>
+              <span className="text-content-primary font-medium">{formatDownloads(downloadCount)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-content-secondary">Followers</span>

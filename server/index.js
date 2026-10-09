@@ -50,6 +50,10 @@ db.exec(`
     FOREIGN KEY (repo_id) REFERENCES repositories(id),
     UNIQUE(repo_id, filename)
   );
+  CREATE TABLE IF NOT EXISTS download_counts (
+    slug TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0
+  );
 `)
 
 // --- In-memory verification codes (short-lived, no need to persist) ---
@@ -424,6 +428,25 @@ app.put('/api/repos/:slug', authMiddleware, (req, res) => {
 
   const updated = db.prepare('SELECT * FROM repositories WHERE slug = ?').get(req.params.slug)
   res.json({ success: true, repo: updated })
+})
+
+// --- Download tracking ---
+
+// Increment download count for a mod (by slug)
+app.post('/api/downloads/:slug', (req, res) => {
+  const slug = req.params.slug
+  db.prepare(`
+    INSERT INTO download_counts (slug, count) VALUES (?, 1)
+    ON CONFLICT(slug) DO UPDATE SET count = count + 1
+  `).run(slug)
+  const row = db.prepare('SELECT count FROM download_counts WHERE slug = ?').get(slug)
+  res.json({ slug, count: row?.count ?? 0 })
+})
+
+// Get download count for a mod (by slug)
+app.get('/api/downloads/:slug', (req, res) => {
+  const row = db.prepare('SELECT count FROM download_counts WHERE slug = ?').get(req.params.slug)
+  res.json({ slug: req.params.slug, count: row?.count ?? 0 })
 })
 
 const PORT = process.env.PORT || 3001
