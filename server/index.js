@@ -76,7 +76,8 @@ function sendVerificationEmail(email, code) {
   }).then(async (r) => {
     if (!r.ok) {
       const err = await r.text()
-      console.error('[WASModrinth] Resend API error:', err)
+      // Free-tier Resend only sends to the owner's email; treat as expected dev fallback
+      console.warn('[WASModrinth] Resend send failed, using dev mode:', err.slice(0, 120))
       throw new Error('send_failed')
     }
     return {}
