@@ -22,6 +22,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState('downloads')
   const [selectedModSlug, setSelectedModSlug] = useState(null)
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authMode, setAuthMode] = useState('signin')
 
   // Derive modal visibility from the route
   const showSubmitModal = location.pathname === '/upload'
@@ -178,7 +179,7 @@ export default function App() {
         onSearch={handleSearch}
         onNavigate={handleNavigate}
         currentPath={location.pathname}
-        onAuthClick={() => setShowAuthModal(true)}
+        onAuthClick={(mode) => { setAuthMode(mode || 'signin'); setShowAuthModal(true) }}
       />
       {renderRoute()}
       {showSubmitModal && isLoggedIn() && (
@@ -193,12 +194,14 @@ export default function App() {
         <AuthModal
           onClose={() => navigate('/')}
           onAuthed={() => setShowAuthModal(false)}
+          initialMode="signup"
         />
       )}
       {showAuthModal && (
         <AuthModal
           onClose={() => setShowAuthModal(false)}
           onAuthed={() => setShowAuthModal(false)}
+          initialMode={authMode}
         />
       )}
       {/* Footer */}

@@ -1,12 +1,15 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
-// Session state for the current user
+// Session state
 let currentUser = null
+let sessionToken = null
 
 // Load from sessionStorage on init
 try {
-  const stored = sessionStorage.getItem('wasmodrinth_user')
-  if (stored) currentUser = JSON.parse(stored)
+  const storedUser = sessionStorage.getItem('wasmodrinth_user')
+  const storedToken = sessionStorage.getItem('wasmodrinth_token')
+  if (storedUser) currentUser = JSON.parse(storedUser)
+  if (storedToken) sessionToken = storedToken
 } catch {
   // ignore
 }
@@ -20,35 +23,64 @@ export function isLoggedIn() {
 }
 
 export function logout() {
+  if (sessionToken) {
+    fetch(`${API_BASE}/api/signout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    }).catch(() => {})
+  }
   currentUser = null
+  sessionToken = null
   sessionStorage.removeItem('wasmodrinth_user')
+  sessionStorage.removeItem('wasmodrinth_token')
 }
 
 /**
- * Request a verification code to be sent to the given email.
+ * Sign Up: request a verification code for a new account.
  */
-export async function sendVerificationCode(email) {
-  const res = await fetch(`${API_BASE}/api/send-code`, {
+export async function signUp(email, username, password) {
+  const res = await fetch(`${API_BASE}/api/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, username, password }),
   })
   return res.json()
 }
 
 /**
- * Verify the code and create the account.
+ * Verify the signup code and create the account.
  */
-export async function verifyCode(email, code, username) {
-  const res = await fetch(`${API_BASE}/api/verify-code`, {
+export async function verifySignUp(email, code) {
+  const res = await fetch(`${API_BASE}/api/verify-signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, code, username }),
+    body: JSON.stringify({ email, code }),
   })
   const data = await res.json()
   if (data.success) {
     currentUser = data.account
+    sessionToken = data.token
     sessionStorage.setItem('wasmodrinth_user', JSON.stringify(data.account))
+    sessionStorage.setItem('wasmodrinth_token', data.token)
+  }
+  return data
+}
+
+/**
+ * Sign In: validate email + password against the database.
+ */
+export async function signIn(email, password) {
+  const res = await fetch(`${API_BASE}/api/signin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  const data = await res.json()
+  if (data.success) {
+    currentUser = data.account
+    sessionToken = data.token
+    sessionStorage.setItem('wasmodrinth_user', JSON.stringify(data.account))
+    sessionStorage.setItem('wasmodrinth_token', data.token)
   }
   return data
 }

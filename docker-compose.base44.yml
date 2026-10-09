@@ -27,6 +27,7 @@ services:
     volumes:
       - .:/app
       - /app/server/node_modules
+      - wasmodrinth-db:/data
     ports:
       - "3001:3001"
     environment:
@@ -42,3 +43,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+volumes:
+  wasmodrinth-db:

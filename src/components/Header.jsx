@@ -6,6 +6,7 @@ import { isLoggedIn, getCurrentUser, logout } from '../data/auth.js'
  * search bar, navigation links, and account auth controls.
  */
 export default function Header({ onSearch, onNavigate, currentPath, onAuthClick }) {
+  // onAuthClick(mode) — 'signin' or 'signup'
   const [query, setQuery] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const loggedIn = isLoggedIn()
@@ -117,10 +118,13 @@ export default function Header({ onSearch, onNavigate, currentPath, onAuthClick 
           </div>
         ) : (
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button onClick={() => onAuthClick()} className="btn-secondary text-sm">
+            <button onClick={() => onAuthClick('signin')} className="btn-secondary text-sm">
               Sign In
             </button>
-            <button onClick={() => onNavigate('/upload')} className="btn-primary flex-shrink-0">
+            <button onClick={() => onAuthClick('signup')} className="btn-primary text-sm">
+              Sign Up
+            </button>
+            <button onClick={() => onNavigate('/upload')} className="btn-secondary flex-shrink-0">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round"/>
                 <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round"/>

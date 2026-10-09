@@ -1,29 +1,47 @@
 import { useState } from 'react'
-import { sendVerificationCode, verifyCode } from '../data/auth.js'
+import { signUp, verifySignUp, signIn } from '../data/auth.js'
 
 /**
- * AuthModal — account creation with email verification via Resend.
- * Two-step flow: enter email → receive 6-digit code → paste to verify.
+ * AuthModal — Sign Up (with email verification) and Sign In flows.
+ * mode: 'signup' | 'signin' (initial)
  */
-export default function AuthModal({ onClose, onAuthed }) {
-  const [step, setStep] = useState('email') // 'email' | 'code' | 'success'
+export default function AuthModal({ onClose, onAuthed, initialMode = 'signin' }) {
+  const [mode, setMode] = useState(initialMode) // 'signup' | 'signin'
+  const [step, setStep] = useState('form') // 'form' | 'code' | 'success'
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [devCode, setDevCode] = useState(null)
 
-  const handleSendCode = async (e) => {
+  const switchMode = (newMode) => {
+    setMode(newMode)
+    setStep('form')
+    setError('')
+    setDevCode(null)
+  }
+
+  // --- Sign Up: submit form → send code ---
+  const handleSignUp = async (e) => {
     e.preventDefault()
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('Please enter a valid email address')
       return
     }
+    if (!username || username.trim().length < 2) {
+      setError('Username must be at least 2 characters')
+      return
+    }
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
     setLoading(true)
     setError('')
     try {
-      const result = await sendVerificationCode(email)
+      const result = await signUp(email, username, password)
       if (result.error) {
         setError(result.error)
       } else {
@@ -36,6 +54,7 @@ export default function AuthModal({ onClose, onAuthed }) {
     setLoading(false)
   }
 
+  // --- Verify signup code ---
   const handleVerify = async (e) => {
     e.preventDefault()
     if (!code || code.length !== 6) {
@@ -45,7 +64,7 @@ export default function AuthModal({ onClose, onAuthed }) {
     setLoading(true)
     setError('')
     try {
-      const result = await verifyCode(email, code, username || undefined)
+      const result = await verifySignUp(email, code)
       if (result.error) {
         setError(result.error)
       } else {
@@ -54,6 +73,29 @@ export default function AuthModal({ onClose, onAuthed }) {
       }
     } catch {
       setError('Failed to verify. Please try again.')
+    }
+    setLoading(false)
+  }
+
+  // --- Sign In: submit form → authenticate ---
+  const handleSignIn = async (e) => {
+    e.preventDefault()
+    if (!email || !password) {
+      setError('Email and password are required')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const result = await signIn(email, password)
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setStep('success')
+        onAuthed?.(result.account)
+      }
+    } catch {
+      setError('Failed to connect to server. Please try again.')
     }
     setLoading(false)
   }
@@ -67,12 +109,13 @@ export default function AuthModal({ onClose, onAuthed }) {
         <div className="flex items-center justify-between p-5 border-b border-surface-4">
           <div>
             <h2 className="text-xl font-bold text-content-primary">
-              {step === 'success' ? 'Welcome!' : 'Create Account'}
+              {step === 'success' ? 'Welcome!' : mode === 'signup' ? 'Create Account' : 'Sign In'}
             </h2>
             <p className="text-sm text-content-secondary mt-0.5">
-              {step === 'email' && 'Verify your email to get started'}
               {step === 'code' && 'Enter the code we sent you'}
               {step === 'success' && 'Your account is ready'}
+              {step === 'form' && mode === 'signup' && 'Verify your email to get started'}
+              {step === 'form' && mode === 'signin' && 'Welcome back to WASModrinth'}
             </p>
           </div>
           <button onClick={handleClose} className="btn-ghost p-2 rounded-lg">
@@ -92,7 +135,9 @@ export default function AuthModal({ onClose, onAuthed }) {
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-bold text-content-primary">Account Created!</h3>
+              <h3 className="text-lg font-bold text-content-primary">
+                {mode === 'signup' ? 'Account Created!' : 'Signed In!'}
+              </h3>
               <p className="text-sm text-content-secondary mt-1">
                 Logged in as <span className="text-content-primary font-medium">{username || email.split('@')[0]}</span>
               </p>
@@ -100,7 +145,7 @@ export default function AuthModal({ onClose, onAuthed }) {
             <button onClick={onClose} className="btn-primary mx-auto">Continue</button>
           </div>
         ) : step === 'code' ? (
-          /* Code verification step */
+          /* Code verification step (signup only) */
           <form onSubmit={handleVerify} className="p-5 space-y-4">
             {error && (
               <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg p-3">
@@ -142,14 +187,14 @@ export default function AuthModal({ onClose, onAuthed }) {
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => { setStep('email'); setCode(''); setError('') }}
+                onClick={() => { setStep('form'); setCode(''); setError('') }}
                 className="text-sm text-content-secondary hover:text-content-primary"
               >
-                ← Change email
+                ← Back
               </button>
               <button
                 type="button"
-                onClick={handleSendCode}
+                onClick={handleSignUp}
                 className="text-sm text-content-link hover:text-accent-blue"
                 disabled={loading}
               >
@@ -162,26 +207,28 @@ export default function AuthModal({ onClose, onAuthed }) {
             </button>
           </form>
         ) : (
-          /* Email entry step */
-          <form onSubmit={handleSendCode} className="p-5 space-y-4">
+          /* Form step */
+          <form onSubmit={mode === 'signup' ? handleSignUp : handleSignIn} className="p-5 space-y-4">
             {error && (
               <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg p-3">
                 <p className="text-sm text-accent-red">{error}</p>
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
-                Username <span className="normal-case text-content-secondary/60">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="YourName"
-                className="input w-full"
-              />
-            </div>
+            {mode === 'signup' && (
+              <div>
+                <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="YourName"
+                  className="input w-full"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
@@ -197,13 +244,41 @@ export default function AuthModal({ onClose, onAuthed }) {
               />
             </div>
 
-            <p className="text-xs text-content-secondary">
-              We'll send a 6-digit verification code to this email. WASModrinth will use this to verify your account.
-            </p>
+            <div>
+              <label className="block text-xs font-bold text-content-secondary uppercase tracking-wide mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
+                className="input w-full"
+              />
+            </div>
 
             <button type="submit" disabled={loading} className="btn-primary w-full justify-center disabled:opacity-50">
-              {loading ? 'Sending...' : 'Send Verification Code'}
+              {loading
+                ? (mode === 'signup' ? 'Sending...' : 'Signing in...')
+                : (mode === 'signup' ? 'Send Verification Code' : 'Sign In')}
             </button>
+
+            {/* Mode toggle */}
+            <div className="text-center text-sm text-content-secondary">
+              {mode === 'signup' ? (
+                <>Already have an account?{' '}
+                  <button type="button" onClick={() => switchMode('signin')} className="text-content-link hover:text-accent-blue font-medium">
+                    Sign In
+                  </button>
+                </>
+              ) : (
+                <>Don't have an account?{' '}
+                  <button type="button" onClick={() => switchMode('signup')} className="text-content-link hover:text-accent-blue font-medium">
+                    Sign Up
+                  </button>
+                </>
+              )}
+            </div>
           </form>
         )}
       </div>
