@@ -56,7 +56,7 @@ function sendVerificationEmail(email, code) {
     body: JSON.stringify({
       from: fromEmail,
       to: [email],
-      subject: 'Your WASModrinth Verification Code',
+      subject: `${code} is your WASModrinth verification code`,
       html: `
         <div style="font-family: Inter, system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
           <div style="text-align: center; margin-bottom: 24px;">
@@ -172,7 +172,8 @@ app.post('/api/verify-signup', (req, res) => {
     return res.status(400).json({ error: 'Code expired. Please request a new code.' })
   }
   if (stored.code !== code) {
-    return res.status(400).json({ error: 'Invalid verification code' })
+    console.warn(`[WASModrinth] Invalid signup code for ${email}`)
+    return res.status(400).json({ error: 'Invalid verification code. Use the code from your most recent email.' })
   }
 
   // Create the account
