@@ -15,7 +15,7 @@ export default function Header({ onSearch, onNavigate, currentPath, onAuthClick 
   const navItems = [
     { label: 'Mods', path: '/' },
     { label: 'Categories', path: '/categories' },
-    { label: 'Gitea', path: '/gitea' },
+    { label: 'Repos', path: '/repos' },
   ]
 
   const handleSearch = (e) => {

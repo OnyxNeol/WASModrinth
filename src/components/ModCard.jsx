@@ -48,6 +48,7 @@ export default function ModCard({ mod, onClick }) {
         )}
         {hosting === 'github' && <span className="badge-blue">GitHub</span>}
         {hosting === 'huggingface' && <span className="badge-purple">HF</span>}
+        {hosting === 'native' && <span className="badge-green">WASModrinth</span>}
       </div>
 
       {/* Footer: downloads + version */}

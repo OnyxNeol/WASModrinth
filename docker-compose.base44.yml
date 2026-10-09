@@ -36,16 +36,10 @@ services:
     environment:
       - PORT=3001
       - BASE44_PREVIEW_MODE=${BASE44_PREVIEW_MODE:-}
-      - GITEA_URL=http://gitea:3000
-      - GITEA_ADMIN_USER=wasmodrinth
-      - GITEA_ADMIN_PASS=gitea_admin_123
     env_file:
       - /run/base44/app.env
     command: ["sh", "-ec", "npm install && exec npm run dev"]
     restart: on-failure
-    depends_on:
-      gitea:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "const http = require('http'); const req = http.get('http://localhost:3001/', (res) => process.exit(res.statusCode < 500 ? 0 : 1)); req.on('error', () => process.exit(1));"]
       interval: 10s
@@ -53,30 +47,5 @@ services:
       retries: 5
       start_period: 20s
 
-  gitea:
-    image: gitea/gitea:latest
-    environment:
-      - USER_UID=1000
-      - USER_GID=1000
-      - GITEA__database__DB_TYPE=sqlite3
-      - GITEA__database__PATH=/data/gitea/gitea.db
-      - GITEA__security__INSTALL_LOCK=true
-      - GITEA__server__DOMAIN=localhost
-      - GITEA__server__ROOT_URL=http://localhost:3002/
-      - GITEA__server__HTTP_PORT=3000
-      - GITEA__service__DISABLE_REGISTRATION=false
-    volumes:
-      - gitea-data:/data
-    ports:
-      - "3002:3000"
-    restart: on-failure
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/v1/version"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 30s
-
 volumes:
   wasmodrinth-db:
-  gitea-data:

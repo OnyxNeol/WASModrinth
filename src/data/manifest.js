@@ -43,8 +43,11 @@ export async function fetchManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
  */
 export function resolveDownloadUrl(mod) {
   if (!mod.download_url) return null
+  // Relative paths (native repos proxied through the auth server)
+  if (mod.download_url.startsWith('/')) {
+    return mod.download_url
+  }
   // The manifest stores fully-qualified absolute URLs for both hosting providers.
-  // We validate and return them as-is.
   try {
     const url = new URL(mod.download_url)
     if (url.protocol === 'https:' || url.protocol === 'http:') {
@@ -61,9 +64,9 @@ export function resolveDownloadUrl(mod) {
  */
 export function getHostingProvider(mod) {
   if (!mod.download_url) return 'unknown'
-  // Gitea download URLs are relative paths proxied through the auth server
-  if (mod.download_url.includes('/api/gitea/')) {
-    return 'gitea'
+  // Native repos are relative paths proxied through the auth server
+  if (mod.download_url.startsWith('/api/repos/')) {
+    return 'native'
   }
   try {
     const host = new URL(mod.download_url).hostname
@@ -128,11 +131,14 @@ export function validateModEntry(entry) {
     errors.push('License is required')
   }
 
-  // Client-side .js file extension check for Eaglercraft/EaglerForge mods
+  // Client-side file extension check — .js mods and .epk Eaglerpacks supported
   if (!entry.filename || !entry.filename.trim()) {
     errors.push('Filename is required')
-  } else if (!entry.filename.endsWith('.js')) {
-    errors.push('File must have a .js extension — Eaglercraft mods are JavaScript files')
+  } else {
+    const ext = entry.filename.split('.').pop().toLowerCase()
+    if (!['js', 'epk'].includes(ext)) {
+      errors.push('File must have a .js or .epk extension — Eaglercraft mods are .js files, Eaglerpacks are .epk files')
+    }
   }
 
   // download_url must be an absolute URL (raw GitHub or Hugging Face)

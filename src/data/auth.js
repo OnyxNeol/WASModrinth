@@ -18,6 +18,10 @@ export function getCurrentUser() {
   return currentUser
 }
 
+export function getAuthToken() {
+  return sessionToken
+}
+
 export function isLoggedIn() {
   return currentUser !== null
 }

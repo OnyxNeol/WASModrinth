@@ -2,21 +2,26 @@
 
 ## Stack
 - **Frontend**: Vite + React + Tailwind CSS (port 3000 → 5173 inside container)
-- **Auth server**: Express + SQLite + bcrypt (port 3001, `server/index.js`)
-- **Gitea**: Self-hosted Git instance for mod repo hosting (port 3002 → 3000 inside container)
+- **Auth/Repo server**: Express + SQLite + bcrypt (port 3001, `server/index.js`)
 
 ## Services (docker-compose.base44.yml)
 - `web` — Vite dev server, proxies `/api` to the auth server via `AUTH_PROXY_TARGET`
-- `auth` — Express API server with SQLite DB volume; talks to Gitea via basic auth
-- `gitea` — Gitea with SQLite storage; auto-creates admin user via `gitea-init` one-shot service
-- `gitea-init` — One-shot service that creates the `wasmodrinth` admin user; runs as UID 1000
+- `auth` — Express API server with SQLite DB volume; handles auth + native repository CRUD
 
-## Gitea Integration
-- Admin credentials: `wasmodrinth` / `gitea_admin_123` (set in compose `environment:`)
-- The auth server proxies all Gitea API operations — the frontend never talks to Gitea directly
-- Submitting a mod with "Gitea Repository" mode creates a real Gitea repo with the .js file
-- The "Gitea" nav link lets users browse repos and import .js files as mods
-- Raw file downloads are proxied through `/api/gitea/raw/:owner/:repo/:branch/*`
+## Native Repository System
+- Repositories are stored in SQLite (`repositories` + `repository_files` tables)
+- The logged-in user is automatically the repository owner with full edit/manage permissions
+- File uploads support `.js` (Eaglercraft mods) and `.epk` (Eaglerpack archives)
+- Files are stored as BLOBs in SQLite and served via `/api/repos/:slug/files/:filename`
+- The "Repos" nav link lets users browse repositories and import files as mods
+- Submitting a mod with "Native Repository" mode creates a repo and uploads the file in one flow
+
+## Dual-Hosting Manifest Integration
+- The app fetches `public/manifest.json` at runtime — the centralized mod database
+- Manifest entries use absolute `download_url` paths for:
+  - Open-source mods → raw GitHub endpoints (`https://raw.githubusercontent.com/...`)
+  - Private/ARR mods → Hugging Face repositories (`https://huggingface.co/.../resolve/main/...`)
+- Native repos use relative paths (`/api/repos/:slug/files/:filename`) proxied through the auth server
 
 ## Auth Flow
 - Sign-up sends a 6-digit code via Resend (or dev mode if Resend fails)
@@ -31,6 +36,5 @@
 
 ## Verification
 - `curl http://localhost:3000/` — frontend
-- `curl http://localhost:3001/` — auth server health
-- `curl http://localhost:3000/api/gitea/repos` — Gitea repo list (proxied)
-- `curl http://localhost:3002/api/v1/version` — Gitea health (direct)
+- `curl http://localhost:3001/` — auth/repo server health
+- `curl http://localhost:3000/api/repos` — repository list (proxied)

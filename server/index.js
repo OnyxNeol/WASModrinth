@@ -3,7 +3,6 @@ import cors from 'cors'
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
-import { searchRepos, getRepoContents, createModRepo, streamRawFile } from './gitea.js'
 
 const app = express()
 
@@ -25,14 +24,39 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+  CREATE TABLE IF NOT EXISTS repositories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    author TEXT NOT NULL,
+    owner_id INTEGER NOT NULL,
+    category TEXT,
+    license TEXT,
+    version TEXT DEFAULT '1.0.0',
+    icon_url TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (owner_id) REFERENCES users(id)
+  );
+  CREATE TABLE IF NOT EXISTS repository_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    file_type TEXT NOT NULL,
+    content BLOB,
+    size INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (repo_id) REFERENCES repositories(id),
+    UNIQUE(repo_id, filename)
+  );
 `)
 
 // --- In-memory verification codes (short-lived, no need to persist) ---
-const verificationCodes = new Map() // email -> { code, expires, purpose: 'signup'|'signin' }
+const verificationCodes = new Map()
 
 // --- CORS ---
 app.use(cors({ origin: true, credentials: true }))
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({ limit: '50mb' }))
 
 // --- Helpers ---
 function sendVerificationEmail(email, code) {
@@ -77,7 +101,6 @@ function sendVerificationEmail(email, code) {
   }).then(async (r) => {
     if (!r.ok) {
       const err = await r.text()
-      // Free-tier Resend only sends to the owner's email; treat as expected dev fallback
       console.warn('[WASModrinth] Resend send failed, using dev mode:', err.slice(0, 120))
       throw new Error('send_failed')
     }
@@ -108,12 +131,19 @@ function publicUser(user) {
   return { id: user.id, username: user.username, email: user.email, createdAt: user.created_at }
 }
 
-// --- Routes ---
+// --- Auth middleware ---
+function authMiddleware(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '')
+  const user = getUserByToken(token)
+  if (!user) return res.status(401).json({ error: 'Not authenticated' })
+  req.user = user
+  next()
+}
 
-// Health
+// --- Auth routes ---
+
 app.get('/', (req, res) => res.json({ status: 'ok' }))
 
-// POST /api/signup — validate input, check email not taken, send verification code
 app.post('/api/signup', async (req, res) => {
   const { username, password } = req.body
   const email = String(req.body.email || '').trim().toLowerCase()
@@ -132,7 +162,6 @@ app.post('/api/signup', async (req, res) => {
     return res.status(409).json({ error: 'An account with this email already exists' })
   }
 
-  // Reuse an unexpired code so earlier emails stay valid after "Resend code"
   const pending = verificationCodes.get(email)
   const code = (pending && pending.purpose === 'signup' && Date.now() < pending.expires)
     ? pending.code
@@ -149,14 +178,11 @@ app.post('/api/signup', async (req, res) => {
     const result = await sendVerificationEmail(email, code)
     res.json({ success: true, ...result, message: 'Verification code sent' })
   } catch {
-    // Resend failed (e.g. unverified domain, non-owner recipient in free tier)
-    // Fall back to dev mode so the flow still works
     console.log(`[WASModrinth] Resend failed — dev code for ${email}: ${code}`)
     res.json({ success: true, devCode: code, message: 'Email sending failed — code shown in dev mode' })
   }
 })
 
-// POST /api/verify-signup — verify code and create account in DB
 app.post('/api/verify-signup', (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase()
   const code = String(req.body.code || '').trim()
@@ -173,11 +199,9 @@ app.post('/api/verify-signup', (req, res) => {
     return res.status(400).json({ error: 'Code expired. Please request a new code.' })
   }
   if (stored.code !== code) {
-    console.warn(`[WASModrinth] Invalid signup code for ${email}`)
-    return res.status(400).json({ error: 'Invalid verification code. Use the code from your most recent email.' })
+    return res.status(400).json({ error: 'Invalid verification code.' })
   }
 
-  // Create the account
   verificationCodes.delete(email)
   const hash = bcrypt.hashSync(stored.password, 10)
   const info = db.prepare(
@@ -189,7 +213,6 @@ app.post('/api/verify-signup', (req, res) => {
   res.json({ success: true, account: publicUser(user), token })
 })
 
-// POST /api/signin — validate email + password, return account + token
 app.post('/api/signin', (req, res) => {
   const { password } = req.body
   const email = String(req.body.email || '').trim().toLowerCase()
@@ -201,7 +224,6 @@ app.post('/api/signin', (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Invalid email or password' })
   }
-
   if (!bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'Invalid email or password' })
   }
@@ -210,7 +232,6 @@ app.post('/api/signin', (req, res) => {
   res.json({ success: true, account: publicUser(user), token })
 })
 
-// POST /api/me — validate token, return current user
 app.post('/api/me', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
   const user = getUserByToken(token)
@@ -218,7 +239,6 @@ app.post('/api/me', (req, res) => {
   res.json({ account: publicUser(user) })
 })
 
-// POST /api/signout — invalidate token
 app.post('/api/signout', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
   if (token) {
@@ -227,60 +247,165 @@ app.post('/api/signout', (req, res) => {
   res.json({ success: true })
 })
 
-// --- Gitea integration routes ---
+// --- Native repository routes ---
 
-// List/search repos
-app.get('/api/gitea/repos', async (req, res) => {
-  try {
-    const repos = await searchRepos(req.query.q)
-    res.json({ repos })
-  } catch (e) {
-    res.status(502).json({ error: e.message })
-  }
+// List all repositories
+app.get('/api/repos', (req, res) => {
+  const repos = db.prepare(`
+    SELECT r.id, r.slug, r.title, r.description, r.author, r.owner_id,
+           r.category, r.license, r.version, r.icon_url, r.created_at,
+           u.username as owner_name
+    FROM repositories r
+    JOIN users u ON r.owner_id = u.id
+    ORDER BY r.created_at DESC
+  `).all()
+  res.json({ repos })
 })
 
-// Get repo file listing
-app.get('/api/gitea/repos/:owner/:repo/contents', async (req, res) => {
-  try {
-    const contents = await getRepoContents(req.params.owner, req.params.repo, req.query.path || '')
-    res.json({ contents })
-  } catch (e) {
-    res.status(502).json({ error: e.message })
-  }
+// Get repository with file listing
+app.get('/api/repos/:slug', (req, res) => {
+  const repo = db.prepare(`
+    SELECT r.*, u.username as owner_name
+    FROM repositories r
+    JOIN users u ON r.owner_id = u.id
+    WHERE r.slug = ?
+  `).get(req.params.slug)
+  if (!repo) return res.status(404).json({ error: 'Repository not found' })
+
+  const files = db.prepare(`
+    SELECT id, filename, file_type, size, created_at
+    FROM repository_files WHERE repo_id = ?
+    ORDER BY filename
+  `).all(repo.id)
+
+  res.json({ repo, files })
 })
 
-// Create a Gitea repo with a mod file
-app.post('/api/gitea/create-mod', async (req, res) => {
+// Create repository (auth required — owner = logged-in user)
+app.post('/api/repos', authMiddleware, (req, res) => {
+  const { slug, title, description, category, license, version, icon_url } = req.body
+  const author = req.user.username
+
+  if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
+    return res.status(400).json({ error: 'Slug must be lowercase with only letters, numbers, and hyphens' })
+  }
+  if (!title || title.trim().length < 3) {
+    return res.status(400).json({ error: 'Title must be at least 3 characters' })
+  }
+
   try {
-    const { mod, fileContent } = req.body
-    if (!mod || !fileContent) {
-      return res.status(400).json({ error: 'Mod data and file content are required' })
+    const info = db.prepare(`
+      INSERT INTO repositories (slug, title, description, author, owner_id, category, license, version, icon_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(slug, title, description || '', author, req.user.id, category || '', license || '', version || '1.0.0', icon_url || '')
+
+    const repo = db.prepare('SELECT * FROM repositories WHERE id = ?').get(info.lastInsertRowid)
+    res.json({ success: true, repo })
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'A repository with this slug already exists' })
     }
-    const result = await createModRepo(mod, fileContent)
-    res.json({ success: true, ...result })
-  } catch (e) {
-    res.status(502).json({ error: e.message })
+    throw e
   }
 })
 
-// Proxy raw file download from Gitea
-app.get('/api/gitea/raw/:owner/:repo/:branch/*', async (req, res) => {
-  try {
-    const { owner, repo, branch } = req.params
-    const filepath = req.params[0]
-    const giteaRes = await streamRawFile(owner, repo, branch, filepath)
-    if (!giteaRes.ok) {
-      return res.status(giteaRes.status).json({ error: 'File not found' })
-    }
-    res.setHeader('Content-Type', giteaRes.headers.get('content-type') || 'application/octet-stream')
-    const buffer = Buffer.from(await giteaRes.arrayBuffer())
-    res.send(buffer)
-  } catch (e) {
-    res.status(502).json({ error: e.message })
+// Upload file to repository (owner only)
+app.post('/api/repos/:slug/files', authMiddleware, (req, res) => {
+  const repo = db.prepare('SELECT * FROM repositories WHERE slug = ?').get(req.params.slug)
+  if (!repo) return res.status(404).json({ error: 'Repository not found' })
+  if (repo.owner_id !== req.user.id) {
+    return res.status(403).json({ error: 'Only the repository owner can upload files' })
   }
+
+  const { filename, content } = req.body
+  if (!filename || !content) {
+    return res.status(400).json({ error: 'Filename and content are required' })
+  }
+
+  // Validate file extension — .js and .epk supported
+  const ext = filename.split('.').pop().toLowerCase()
+  if (!['js', 'epk'].includes(ext)) {
+    return res.status(400).json({ error: 'Only .js and .epk files are supported' })
+  }
+
+  const buffer = Buffer.from(content, 'base64')
+
+  try {
+    db.prepare(`
+      INSERT INTO repository_files (repo_id, filename, file_type, content, size)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(repo.id, filename, ext, buffer, buffer.length)
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'A file with this name already exists in this repository' })
+    }
+    throw e
+  }
+
+  const downloadUrl = `/api/repos/${repo.slug}/files/${encodeURIComponent(filename)}`
+  res.json({ success: true, filename, download_url: downloadUrl, size: buffer.length })
+})
+
+// Download / serve a file
+app.get('/api/repos/:slug/files/:filename', (req, res) => {
+  const repo = db.prepare('SELECT * FROM repositories WHERE slug = ?').get(req.params.slug)
+  if (!repo) return res.status(404).json({ error: 'Repository not found' })
+
+  const filename = decodeURIComponent(req.params.filename)
+  const file = db.prepare('SELECT * FROM repository_files WHERE repo_id = ? AND filename = ?')
+    .get(repo.id, filename)
+  if (!file) return res.status(404).json({ error: 'File not found' })
+
+  const contentTypes = {
+    js: 'application/javascript',
+    epk: 'application/octet-stream',
+  }
+  res.setHeader('Content-Type', contentTypes[file.file_type] || 'application/octet-stream')
+  res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+  res.send(file.content)
+})
+
+// Delete file (owner only)
+app.delete('/api/repos/:slug/files/:filename', authMiddleware, (req, res) => {
+  const repo = db.prepare('SELECT * FROM repositories WHERE slug = ?').get(req.params.slug)
+  if (!repo) return res.status(404).json({ error: 'Repository not found' })
+  if (repo.owner_id !== req.user.id) {
+    return res.status(403).json({ error: 'Only the repository owner can delete files' })
+  }
+
+  const filename = decodeURIComponent(req.params.filename)
+  const result = db.prepare('DELETE FROM repository_files WHERE repo_id = ? AND filename = ?')
+    .run(repo.id, filename)
+  if (result.changes === 0) return res.status(404).json({ error: 'File not found' })
+
+  res.json({ success: true })
+})
+
+// Update repository metadata (owner only)
+app.put('/api/repos/:slug', authMiddleware, (req, res) => {
+  const repo = db.prepare('SELECT * FROM repositories WHERE slug = ?').get(req.params.slug)
+  if (!repo) return res.status(404).json({ error: 'Repository not found' })
+  if (repo.owner_id !== req.user.id) {
+    return res.status(403).json({ error: 'Only the repository owner can update the repository' })
+  }
+
+  const { title, description, category, license, version, icon_url } = req.body
+  db.prepare(`
+    UPDATE repositories SET
+      title = COALESCE(?, title),
+      description = COALESCE(?, description),
+      category = COALESCE(?, category),
+      license = COALESCE(?, license),
+      version = COALESCE(?, version),
+      icon_url = COALESCE(?, icon_url)
+    WHERE slug = ?
+  `).run(title, description, category, license, version, icon_url, req.params.slug)
+
+  const updated = db.prepare('SELECT * FROM repositories WHERE slug = ?').get(req.params.slug)
+  res.json({ success: true, repo: updated })
 })
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[WASModrinth] Auth server running on port ${PORT}`)
+  console.log(`[WASModrinth] Server running on port ${PORT}`)
 })
