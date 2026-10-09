@@ -114,7 +114,8 @@ app.get('/', (req, res) => res.json({ status: 'ok' }))
 
 // POST /api/signup — validate input, check email not taken, send verification code
 app.post('/api/signup', async (req, res) => {
-  const { email, username, password } = req.body
+  const { username, password } = req.body
+  const email = String(req.body.email || '').trim().toLowerCase()
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: 'Valid email is required' })
   }
@@ -130,7 +131,11 @@ app.post('/api/signup', async (req, res) => {
     return res.status(409).json({ error: 'An account with this email already exists' })
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000))
+  // Reuse an unexpired code so earlier emails stay valid after "Resend code"
+  const pending = verificationCodes.get(email)
+  const code = (pending && pending.purpose === 'signup' && Date.now() < pending.expires)
+    ? pending.code
+    : String(Math.floor(100000 + Math.random() * 900000))
   verificationCodes.set(email, {
     code,
     expires: Date.now() + 10 * 60 * 1000,
@@ -152,7 +157,8 @@ app.post('/api/signup', async (req, res) => {
 
 // POST /api/verify-signup — verify code and create account in DB
 app.post('/api/verify-signup', (req, res) => {
-  const { email, code } = req.body
+  const email = String(req.body.email || '').trim().toLowerCase()
+  const code = String(req.body.code || '').trim()
   if (!email || !code) {
     return res.status(400).json({ error: 'Email and code are required' })
   }
@@ -183,7 +189,8 @@ app.post('/api/verify-signup', (req, res) => {
 
 // POST /api/signin — validate email + password, return account + token
 app.post('/api/signin', (req, res) => {
-  const { email, password } = req.body
+  const { password } = req.body
+  const email = String(req.body.email || '').trim().toLowerCase()
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' })
   }
