@@ -15,6 +15,7 @@ export default function AuthModal({ onClose, onAuthed, initialMode = 'signin' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [devCode, setDevCode] = useState(null)
+  const [account, setAccount] = useState(null)
 
   const switchMode = (newMode) => {
     setMode(newMode)
@@ -68,6 +69,7 @@ export default function AuthModal({ onClose, onAuthed, initialMode = 'signin' })
       if (result.error) {
         setError(result.error)
       } else {
+        setAccount(result.account)
         setStep('success')
         onAuthed?.(result.account)
       }
@@ -91,6 +93,7 @@ export default function AuthModal({ onClose, onAuthed, initialMode = 'signin' })
       if (result.error) {
         setError(result.error)
       } else {
+        setAccount(result.account)
         setStep('success')
         onAuthed?.(result.account)
       }
@@ -139,7 +142,15 @@ export default function AuthModal({ onClose, onAuthed, initialMode = 'signin' })
                 {mode === 'signup' ? 'Account Created!' : 'Signed In!'}
               </h3>
               <p className="text-sm text-content-secondary mt-1">
-                Logged in as <span className="text-content-primary font-medium">{username || email.split('@')[0]}</span>
+                Logged in as{' '}
+                <span className="text-content-primary font-medium inline-flex items-center gap-1">
+                  {username || email.split('@')[0]}
+                  {account?.role === 'owner' && (
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#fbbf24" stroke="#1a1c20" strokeWidth="1.5">
+                      <path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.5l-6.3 4.5L8 13.8 2 9.4h7.6z" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </span>
               </p>
             </div>
             <button onClick={onClose} className="btn-primary mx-auto">Continue</button>

@@ -91,14 +91,26 @@ export default function Header({ onSearch, onNavigate, currentPath, onAuthClick 
             </button>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="w-9 h-9 rounded-lg bg-surface-4 flex items-center justify-center font-bold text-content-primary text-sm border border-surface-5 hover:bg-surface-5 transition-all"
+              className="relative w-9 h-9 rounded-lg bg-surface-4 flex items-center justify-center font-bold text-content-primary text-sm border border-surface-5 hover:bg-surface-5 transition-all"
             >
               {(user?.username || user?.email || 'U')[0].toUpperCase()}
+              {user?.role === 'owner' && (
+                <svg className="absolute -top-1.5 -right-1.5 w-4 h-4" viewBox="0 0 24 24" fill="#fbbf24" stroke="#1a1c20" strokeWidth="1.5">
+                  <path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.5l-6.3 4.5L8 13.8 2 9.4h7.6z" strokeLinejoin="round"/>
+                </svg>
+              )}
             </button>
             {menuOpen && (
               <div className="absolute right-0 top-full mt-2 w-48 card p-2 z-50">
                 <div className="px-3 py-2 border-b border-surface-3 mb-1">
-                  <p className="text-sm font-medium text-content-primary truncate">{user?.username || user?.email}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-content-primary truncate">{user?.username || user?.email}</p>
+                    {user?.role === 'owner' && (
+                      <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="#fbbf24" stroke="#1a1c20" strokeWidth="1.5">
+                        <path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.5l-6.3 4.5L8 13.8 2 9.4h7.6z" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
                   <p className="text-xs text-content-secondary truncate">{user?.email}</p>
                 </div>
                 <button

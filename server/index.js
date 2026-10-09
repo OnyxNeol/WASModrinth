@@ -16,6 +16,7 @@ db.exec(`
     username TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE TABLE IF NOT EXISTS sessions (
@@ -136,7 +137,17 @@ function getUserByToken(token) {
 }
 
 function publicUser(user) {
-  return { id: user.id, username: user.username, email: user.email, createdAt: user.created_at }
+  return { id: user.id, username: user.username, email: user.email, role: user.role || 'user', createdAt: user.created_at }
+}
+
+// Auto-assign owner role to the project owner's email
+const OWNER_EMAIL = 'onyxneol@proton.me'
+function ensureOwnerRole(user) {
+  if (user.email === OWNER_EMAIL && user.role !== 'owner') {
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run('owner', user.id)
+    return { ...user, role: 'owner' }
+  }
+  return user
 }
 
 // --- Auth middleware ---
@@ -217,8 +228,9 @@ app.post('/api/verify-signup', (req, res) => {
   ).run(stored.username, email, hash)
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid)
+  const userWithRole = ensureOwnerRole(user)
   const token = createSession(user.id)
-  res.json({ success: true, account: publicUser(user), token })
+  res.json({ success: true, account: publicUser(userWithRole), token })
 })
 
 app.post('/api/signin', (req, res) => {
@@ -236,15 +248,16 @@ app.post('/api/signin', (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' })
   }
 
+  const userWithRole = ensureOwnerRole(user)
   const token = createSession(user.id)
-  res.json({ success: true, account: publicUser(user), token })
+  res.json({ success: true, account: publicUser(userWithRole), token })
 })
 
 app.post('/api/me', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
   const user = getUserByToken(token)
   if (!user) return res.status(401).json({ error: 'Not authenticated' })
-  res.json({ account: publicUser(user) })
+  res.json({ account: publicUser(ensureOwnerRole(user)) })
 })
 
 app.post('/api/signout', (req, res) => {
