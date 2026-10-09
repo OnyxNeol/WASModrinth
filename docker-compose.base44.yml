@@ -11,7 +11,7 @@ services:
       - NODE_ENV=development
       - BASE44_PREVIEW_MODE=${BASE44_PREVIEW_MODE:-}
       - __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=${__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS:-}
-      - VITE_API_URL=http://localhost:3001
+      - VITE_API_URL=https://3001-${BASE44_PUBLIC_HOST_SUFFIX}
     command: ["sh", "-ec", "npm install && exec npm run dev"]
     restart: on-failure
     healthcheck:
