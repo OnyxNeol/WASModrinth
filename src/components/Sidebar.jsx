@@ -5,7 +5,7 @@ import { CATEGORIES, LICENSES } from '../data/constants.js'
  */
 export default function Sidebar({ selectedCategory, selectedLicense, onCategoryChange, onLicenseChange }) {
   return (
-    <aside className="w-full lg:w-56 flex-shrink-0 space-y-6">
+    <aside className="w-full md:w-56 flex-shrink-0 space-y-6">
       {/* Categories */}
       <div>
         <h3 className="text-xs font-bold text-content-secondary uppercase tracking-wide mb-3">
