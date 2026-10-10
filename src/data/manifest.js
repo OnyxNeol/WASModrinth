@@ -2,7 +2,7 @@
 // The frontend fetches this manifest at runtime and resolves download URLs based on
 // each mod's license type (MIT → raw GitHub, ARR → Hugging Face repositories).
 
-const DEFAULT_MANIFEST_URL = '/manifest.json'
+const DEFAULT_MANIFEST_URL = `${import.meta.env.BASE_URL}manifest.json`
 
 // In-memory store so user-submitted mods persist for the session.
 let localMods = []
